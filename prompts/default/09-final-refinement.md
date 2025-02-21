@@ -1,18 +1,17 @@
 Review all previous output from previous steps.
 
-Create a new, well-structured README with these sections:
-
-- Project Overview
-- API Reference (if applicable)
-- Features
-- Installation
-- Usage
-- Testing
-- Contact/Support Information
+Create a new, technically-focused README with these sections:
+- Project Overview (What it does and why it exists)
+- Technical Architecture
+- Key Features
+- Integration Points
+- Non-obvious Configuration/Setup
+- Notable Technical Considerations
 
 Write your final README into ./output/step_09_output.md.
 
-Condense the information.
-Don't go deeper than 3 indentation levels in the markdown. Drop anything deeper.
+Keep the content technical and concise.
+Skip obvious development practices or basic tool usage.
+Avoid redundant summaries or AI-generation notes.
 
 DO NOT MODIFY ANY FILE OTHER THAN ./output/step_09_output.md.

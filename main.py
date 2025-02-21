@@ -15,7 +15,7 @@ def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s: %(message)s",
-        handlers=[logging.StreamHandler()]
+        handlers=[logging.StreamHandler()],
     )
 
 
@@ -25,12 +25,22 @@ def main():
         description="Generate README from prompts using AI",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("-r", "--repo", required=True, help="Target repository directory")
-    parser.add_argument("-c", "--collection", default="default", help="Prompt collection to use")
+    parser.add_argument(
+        "-r", "--repo", required=True, help="Target repository directory"
+    )
+    parser.add_argument(
+        "-c", "--collection", default="default", help="Prompt collection to use"
+    )
     parser.add_argument("-s", "--step", type=int, help="Step number to start from")
-    parser.add_argument("-o", "--only", action="store_true", help="Run only specific step")
+    parser.add_argument(
+        "-o", "--only", action="store_true", help="Run only specific step"
+    )
     parser.add_argument("-m", "--model", default="gpt-4o", help="OpenAI model to use")
-    parser.add_argument("--keep-steps", action="store_true", help="Keep intermediate step output files after generation")
+    parser.add_argument(
+        "--keep-steps",
+        action="store_true",
+        help="Keep intermediate step output files after generation",
+    )
 
     args = parser.parse_args()
     setup_logging()
@@ -41,7 +51,8 @@ def main():
             prompt_collection=args.collection,
             start_step=args.step,
             only_mode=args.only,
-            model=args.model
+            model=args.model,
+            keep_steps=args.keep_steps,  # Pass the keep_steps argument to the config
         )
 
         generator = ReadmeGenerator(config)

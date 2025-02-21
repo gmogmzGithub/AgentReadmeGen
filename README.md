@@ -60,7 +60,7 @@ The generator:
 
 1. Clone the repository:
    ```bash
-   git clone <repo-url>
+   git clone git@code.corp.indeed.com:ai4dp/ai-readme-generation.git
    cd ai-readme-generator
    ```
 
