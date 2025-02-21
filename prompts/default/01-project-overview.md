@@ -1,14 +1,13 @@
-We are creating a high quality readme for this repository.
+We are creating a technical README for engineers and developers who understand standard development practices and internal company libraries.
 
-Look at the current README.md if it exists. Also look at typical project related files such as package.json, pyproject.toml, gradle or maven configuration, etc. Note any information that relates to these sections:
+Analyze the repository's code, configuration files, and structure to determine:
+- Core purpose and functionality
+- Key technical decisions
+- Main architectural components
+- Integration points with other systems
 
-- Project Overview
-- API Reference
-- Features
-- Installation
-- Usage
-- Testing
-- Contact/Support Information
+Focus on WHAT this repository does and WHY it exists from a technical perspective.
+Avoid documenting obvious development practices or basic tool usage.
 
 Write your findings in markdown format to ./output/step_01_output.md.
 

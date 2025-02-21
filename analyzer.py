@@ -1,55 +1,118 @@
-"""Repository analysis module."""
+"""Enhanced repository analysis module."""
 
 import os
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+import re
+from typing import Dict, List, Any
 
 from config import GeneratorConfig
+from code_understanding_analyzer import CodeUnderstandingAnalyzer
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
+from openai import OpenAI
 
 
 class RepositoryAnalyzer:
-    """Analyzes repository structure and content."""
+    """Analyzes repository structure and content with enhanced code understanding."""
 
     # Define the file types we want to analyze
     ANALYZABLE_EXTENSIONS = {
-        # Java ecosystem
-        '.java', '.groovy', '.scala', '.gradle', '.properties', '.mvn', '.maven',
-        # Python ecosystem
-        '.py', '.toml', '.cfg', '.ini',
-        # JavaScript/TypeScript ecosystem
-        '.js', '.jsx', '.ts', '.tsx', '.json',
+        # Java
+        ".java",
+        ".groovy",
+        ".scala",
+        ".gradle",
+        ".properties",
+        ".mvn",
+        ".maven",
+        # Python
+        ".py",
+        ".toml",
+        ".cfg",
+        ".ini",
+        # JavaScript/TypeScript
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".json",
         # Web
-        '.html', '.css', '.scss', '.sass',
+        ".html",
+        ".css",
+        ".scss",
+        ".sass",
         # Documentation
-        '.md', '.rst', '.txt', '.adoc', '.asciidoc',
+        ".md",
+        ".rst",
+        ".txt",
+        ".adoc",
+        ".asciidoc",
         # Configuration
-        '.yaml', '.yml', '.xml', '.env', '.config', '.conf',
+        ".yaml",
+        ".yml",
+        ".xml",
+        ".env",
+        ".config",
+        ".conf",
         # Build systems
-        '.gradle', '.sbt', '.pom', '.build', '.make', '.mk', '.cmake'
+        ".gradle",
+        ".sbt",
+        ".pom",
+        ".build",
+        ".make",
+        ".mk",
+        ".cmake",
     }
 
     # Important project files to always include regardless of extension
     KEY_PROJECT_FILES = {
         # General
-        'README.md', 'LICENSE', 'CONTRIBUTING.md', 'CHANGELOG.md',
+        "README.md",
+        "LICENSE",
+        "CONTRIBUTING.md",
+        "CHANGELOG.md",
         # Package managers
-        'package.json', 'package-lock.json', 'yarn.lock', 'npm-shrinkwrap.json',
-        'Pipfile', 'Pipfile.lock', 'requirements.txt', 'setup.py',
-        'pom.xml', 'build.gradle', 'build.sbt', 'Cargo.toml',
-        'Gemfile', 'Gemfile.lock', 'composer.json', 'composer.lock',
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "npm-shrinkwrap.json",
+        "Pipfile",
+        "Pipfile.lock",
+        "requirements.txt",
+        "setup.py",
+        "pom.xml",
+        "build.gradle",
+        "build.sbt",
+        "Cargo.toml",
+        "Gemfile",
+        "Gemfile.lock",
+        "composer.json",
+        "composer.lock",
         # Configuration
-        '.dockerignore', 'Dockerfile', 'docker-compose.yml',
-        'pyproject.toml', 'tox.ini', 'pytest.ini', 'setup.cfg',
-        'tsconfig.json', '.eslintrc', '.eslintrc.js', '.eslintrc.json',
-        '.babelrc', '.prettierrc', 'webpack.config.js', 'rollup.config.js',
+        ".dockerignore",
+        "Dockerfile",
+        "docker-compose.yml",
+        "pyproject.toml",
+        "tox.ini",
+        "pytest.ini",
+        "setup.cfg",
+        "tsconfig.json",
+        ".eslintrc",
+        ".eslintrc.js",
+        ".eslintrc.json",
+        ".babelrc",
+        ".prettierrc",
+        "webpack.config.js",
+        "rollup.config.js",
         # CI/CD
-        '.gitlab-ci.yml'
+        ".gitlab-ci.yml",
         # Environment
-        '.env.example', '.env.template', '.nvmrc', '.python-version',
+        ".env.example",
+        ".env.template",
+        ".nvmrc",
+        ".python-version",
     }
 
     MAX_FILE_SIZE = 1024 * 100  # 100KB max file size to analyze
@@ -62,6 +125,7 @@ class RepositoryAnalyzer:
         """
         self.config = config
         self.llm = ChatOpenAI(model=config.model, temperature=0)
+        self.code_analyzer = CodeUnderstandingAnalyzer(self.llm)
         self.repo_info = {}
         self.analyzed = False
 
@@ -78,13 +142,16 @@ class RepositoryAnalyzer:
             Entry Points:
             {entry_points}
             
+            # Deep Code Analysis
+            {code_understanding}
+            
             Based on this information, provide a concise analysis of:
             1. What this repository does
             2. Its key components
             3. How it's structured
             4. Any notable features or patterns
             
-            Be specific and focus on what can be inferred from the actual codebase structure.
+            Be specific and focus on what can be inferred from the actual codebase structure and functionality.
             """
         )
 
@@ -111,7 +178,7 @@ class RepositoryAnalyzer:
             ".properties": "Properties",
             ".gradle": "Gradle",
             ".sh": "Shell",
-            ".bat": "Batch"
+            ".bat": "Batch",
         }
 
         ext = Path(file_path).suffix.lower()
@@ -119,12 +186,12 @@ class RepositoryAnalyzer:
 
     def _is_entry_point(self, content: str, language: str, file_path: str) -> bool:
         """Determine if a file is an entry point based on content and language."""
-        # Check by language-specific patterns
+        # Language-specific patterns
         patterns = {
             "Python": ['if __name__ == "__main__":', "def main(", "def run("],
             "Java": ["public static void main", "@SpringBootApplication"],
             "JavaScript": ["export default ", "module.exports", "ReactDOM.render"],
-            "TypeScript": ["export default ", "createRoot"]
+            "TypeScript": ["export default ", "createRoot"],
         }
 
         for pattern in patterns.get(language, []):
@@ -136,7 +203,7 @@ class RepositoryAnalyzer:
             "Python": ["main.py", "app.py", "cli.py", "run.py"],
             "JavaScript": ["index.js", "main.js", "app.js"],
             "TypeScript": ["index.ts", "main.ts", "app.ts"],
-            "Java": ["Application.java", "Main.java"]
+            "Java": ["Application.java", "Main.java"],
         }
 
         filename = Path(file_path).name
@@ -160,14 +227,23 @@ class RepositoryAnalyzer:
                     rel_path = os.path.relpath(file_path, self.config.target_repo)
                     file_stat = os.stat(file_path)
                     if file_stat.st_size <= self.MAX_FILE_SIZE:
-                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        with open(
+                            file_path, "r", encoding="utf-8", errors="ignore"
+                        ) as f:
                             content = f.read()
 
                         language = self._detect_language(rel_path)
                         is_config = file_name in [
-                            'package.json', 'pyproject.toml', 'pom.xml', 'build.gradle',
-                            'Pipfile', 'requirements.txt', 'setup.py', 'Gemfile',
-                            'composer.json', 'Cargo.toml'
+                            "package.json",
+                            "pyproject.toml",
+                            "pom.xml",
+                            "build.gradle",
+                            "Pipfile",
+                            "requirements.txt",
+                            "setup.py",
+                            "Gemfile",
+                            "composer.json",
+                            "Cargo.toml",
                         ]
 
                         file_info = {
@@ -176,7 +252,8 @@ class RepositoryAnalyzer:
                             "is_entry_point": False,  # Key project files usually aren't entry points
                             "is_config": is_config,
                             "size": file_stat.st_size,
-                            "is_key_file": True
+                            "is_key_file": True,
+                            "content": content,  # Store content for code analysis
                         }
 
                         files_info.append(file_info)
@@ -188,8 +265,18 @@ class RepositoryAnalyzer:
         # Second pass for regular file discovery
         for root, _, files in os.walk(self.config.target_repo):
             # Skip common directories to ignore
-            if any(part in root for part in [".git", "node_modules", "venv", "__pycache__",
-                                             "target", "build", "dist"]):
+            if any(
+                part in root
+                for part in [
+                    ".git",
+                    "node_modules",
+                    "venv",
+                    "__pycache__",
+                    "target",
+                    "build",
+                    "dist",
+                ]
+            ):
                 continue
 
             for file in files:
@@ -201,7 +288,9 @@ class RepositoryAnalyzer:
                     continue
 
                 # Check if we should analyze this file
-                should_analyze = any(rel_path.endswith(ext) for ext in self.ANALYZABLE_EXTENSIONS)
+                should_analyze = any(
+                    rel_path.endswith(ext) for ext in self.ANALYZABLE_EXTENSIONS
+                )
 
                 if not should_analyze:
                     continue
@@ -218,9 +307,22 @@ class RepositoryAnalyzer:
                     is_entry = self._is_entry_point(content, language, rel_path)
 
                     # Determine if it's a config file
-                    is_config = any(rel_path.endswith(ext) for ext in
-                                    ['.toml', '.json', '.yml', '.yaml', '.xml', '.properties',
-                                     '.ini', '.cfg']) or 'config' in rel_path.lower()
+                    is_config = (
+                        any(
+                            rel_path.endswith(ext)
+                            for ext in [
+                                ".toml",
+                                ".json",
+                                ".yml",
+                                ".yaml",
+                                ".xml",
+                                ".properties",
+                                ".ini",
+                                ".cfg",
+                            ]
+                        )
+                        or "config" in rel_path.lower()
+                    )
 
                     file_info = {
                         "path": rel_path,
@@ -228,7 +330,8 @@ class RepositoryAnalyzer:
                         "is_entry_point": is_entry,
                         "is_config": is_config,
                         "size": file_stat.st_size,
-                        "is_key_file": False
+                        "is_key_file": False,
+                        "content": content,  # Store content for code analysis
                     }
 
                     files_info.append(file_info)
@@ -245,7 +348,9 @@ class RepositoryAnalyzer:
             "files": files_info,
             "entry_points": entry_points,
             "config_files": config_files,
-            "key_project_files": [info["path"] for info in files_info if info.get("is_key_file", False)]
+            "key_project_files": [
+                info["path"] for info in files_info if info.get("is_key_file", False)
+            ],
         }
 
     def _determine_primary_language(self, files_info: List[Dict[str, Any]]) -> str:
@@ -269,24 +374,37 @@ class RepositoryAnalyzer:
                 continue
 
             try:
-                file_path = os.path.join(self.config.target_repo, file["path"])
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
+                content = file.get("content", "")
+                if not content:
+                    file_path = os.path.join(self.config.target_repo, file["path"])
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
 
                 # Basic dependency detection based on file type
-                if file["path"].endswith("pyproject.toml") or file["path"].endswith("Pipfile"):
+                if file["path"].endswith("pyproject.toml") or file["path"].endswith(
+                    "Pipfile"
+                ):
                     # Extract Python dependencies
-                    import re
-                    deps = re.findall(r'([a-zA-Z0-9_-]+)\s*=\s*["\']([^"\']+)["\']', content)
-                    dependencies.extend([f"{name}=={version}" for name, version in deps])
+                    deps = re.findall(
+                        r'([a-zA-Z0-9_-]+)\s*=\s*["\']([^"\']+)["\']', content
+                    )
+                    dependencies.extend(
+                        [f"{name}=={version}" for name, version in deps]
+                    )
 
                 elif file["path"].endswith("package.json"):
                     # Extract npm dependencies
                     import json
+
                     try:
                         pkg_data = json.loads(content)
-                        deps = {**pkg_data.get("dependencies", {}), **pkg_data.get("devDependencies", {})}
-                        dependencies.extend([f"{name}@{version}" for name, version in deps.items()])
+                        deps = {
+                            **pkg_data.get("dependencies", {}),
+                            **pkg_data.get("devDependencies", {}),
+                        }
+                        dependencies.extend(
+                            [f"{name}@{version}" for name, version in deps.items()]
+                        )
                     except json.JSONDecodeError:
                         pass
 
@@ -294,88 +412,97 @@ class RepositoryAnalyzer:
                     # Extract pip requirements
                     for line in content.splitlines():
                         line = line.strip()
-                        if line and not line.startswith('#'):
+                        if line and not line.startswith("#"):
                             dependencies.append(line)
 
             except Exception as e:
-                logging.warning(f"Error extracting dependencies from {file['path']}: {str(e)}")
+                logging.warning(
+                    f"Error extracting dependencies from {file['path']}: {str(e)}"
+                )
 
         return dependencies
 
-    def _check_for_gradle(self) -> Dict[str, Any]:
-        """Check if this is a Gradle project and identify execution details."""
-        gradle_info = {
-            "is_gradle": False,
-            "has_gradle_wrapper": False,
-            "gradle_commands": []
+    def _detect_build_system(self, files_info: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Detect the build system used in the repository."""
+        build_system = {"type": "unknown", "has_wrapper": False, "files": []}
+
+        # Check for build system files
+        build_system_indicators = {
+            "gradle": [
+                ".gradle",
+                "build.gradle",
+                "gradle.properties",
+                "settings.gradle",
+                "gradlew",
+            ],
+            "maven": ["pom.xml", "mvnw"],
+            "npm": ["package.json", "yarn.lock", "package-lock.json"],
+            "pip": ["setup.py", "requirements.txt", "Pipfile", "pyproject.toml"],
+            "cargo": ["Cargo.toml"],
+            "make": ["Makefile", "makefile"],
+            "bazel": ["BUILD.bazel", "WORKSPACE"],
         }
 
-        # Check for Gradle files
-        gradle_files = [
-            self.config.target_repo / "build.gradle",
-            self.config.target_repo / "build.gradle.kts",
-            self.config.target_repo / "settings.gradle",
-            self.config.target_repo / "settings.gradle.kts"
-        ]
+        found_systems = {}
 
-        for file in gradle_files:
-            if file.exists():
-                gradle_info["is_gradle"] = True
-                break
+        for file_info in files_info:
+            file_path = file_info["path"]
+            file_name = os.path.basename(file_path)
 
-        # Check for Gradle wrapper
-        gradle_wrapper = self.config.target_repo / "gradlew"
-        gradle_wrapper_bat = self.config.target_repo / "gradlew.bat"
+            for system, indicators in build_system_indicators.items():
+                if file_name in indicators or any(
+                    file_path.endswith(ext) for ext in indicators
+                ):
+                    found_systems[system] = found_systems.get(system, 0) + 1
+                    if system not in build_system["files"]:
+                        build_system["files"].append(file_path)
 
-        if gradle_wrapper.exists() or gradle_wrapper_bat.exists():
-            gradle_info["has_gradle_wrapper"] = True
+        if found_systems:
+            # Determine primary build system
+            primary_system = max(found_systems.items(), key=lambda x: x[1])[0]
+            build_system["type"] = primary_system
 
-            # Try to find common tasks by looking in build.gradle files
-            gradle_build_files = list(self.config.target_repo.glob("**/build.gradle")) + \
-                                 list(self.config.target_repo.glob("**/build.gradle.kts"))
+            # Check for wrappers
+            if primary_system == "gradle" and any(
+                "gradlew" in file for file in build_system["files"]
+            ):
+                build_system["has_wrapper"] = True
+            elif primary_system == "maven" and any(
+                "mvnw" in file for file in build_system["files"]
+            ):
+                build_system["has_wrapper"] = True
 
-            common_tasks = ["build", "test", "run", "bootRun", "clean"]
-            found_tasks = set()
+        return build_system
 
-            for build_file in gradle_build_files[:5]:  # Limit to first 5 build files
-                try:
-                    content = build_file.read_text(encoding='utf-8', errors='ignore')
+    def _detect_custom_tools(self, files_info: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Detect custom tools used in the repository."""
+        custom_tools = []
 
-                    # Look for task definitions or plugins that suggest certain tasks
-                    if "apply plugin: 'application'" in content or "id 'application'" in content:
-                        found_tasks.add("run")
-                    if "apply plugin: 'spring-boot'" in content or "id 'org.springframework.boot'" in content:
-                        found_tasks.add("bootRun")
-                    if "task" in content and "Test" in content:
-                        found_tasks.add("test")
-
-                    # Add standard tasks
-                    found_tasks.update(["build", "clean"])
-
-                except Exception as e:
-                    logging.warning(f"Error reading Gradle file {build_file}: {e}")
-
-            # Generate command examples using ./gradlew
-            gradle_info["gradle_commands"] = [f"./gradlew {task}" for task in found_tasks]
-
-        return gradle_info
-
-    def _check_for_hobo(self) -> Dict[str, Any]:
-        """Check if this repository uses the company's Hobo tool."""
-        hobo_info = {
-            "uses_hobo": False,
-            "hobo_directory": None,
-            "suggested_commands": []
+        # Check for common custom tools and directories
+        custom_tool_indicators = {
+            "hobo": ["hobo", "hobo.properties", "hobo.yml"],
+            "docker": ["Dockerfile", "docker-compose.yml", ".dockerignore"],
+            "kubernetes": [".k8s", "k8s", "kubernetes", "helm"],
+            "terraform": [".tf", "terraform", ".tfvars"],
+            "jenkins": ["Jenkinsfile"],
+            "gitlab-ci": [".gitlab-ci.yml"],
+            "github-actions": [".github/workflows"],
         }
 
-        # Check for hobo directory
-        hobo_dir = self.config.target_repo / "hobo"
-        if hobo_dir.exists() and hobo_dir.is_dir():
-            hobo_info["uses_hobo"] = True
-            hobo_info["hobo_directory"] = "hobo"
-            hobo_info["suggested_commands"] = ["hoboRun", "hoboStop", "hoboStatus"]
+        for file_info in files_info:
+            file_path = file_info["path"]
+            file_name = os.path.basename(file_path)
 
-        return hobo_info
+            for tool, indicators in custom_tool_indicators.items():
+                if (
+                    file_name in indicators
+                    or any(file_path.endswith(ext) for ext in indicators)
+                    or any(part in file_path for part in indicators)
+                ):
+                    if tool not in custom_tools:
+                        custom_tools.append(tool)
+
+        return {"custom_tools": custom_tools}
 
     def analyze_repository(self, update: bool = True) -> str:
         """Analyze the repository structure and content.
@@ -390,7 +517,7 @@ class RepositoryAnalyzer:
         root_readme_paths = [
             self.config.target_repo / "README.md",
             self.config.target_repo / "Readme.md",
-            self.config.target_repo / "readme.md"
+            self.config.target_repo / "readme.md",
         ]
 
         for path in root_readme_paths:
@@ -403,7 +530,7 @@ class RepositoryAnalyzer:
                             "name": self.config.target_repo.name,
                             "readme_exists": True,
                             "readme_path": str(path),
-                            "skip_process": True
+                            "skip_process": True,
                         }
                         return f"Non-empty README already exists at {path}. Skipping analysis."
                 except Exception as e:
@@ -417,8 +544,9 @@ class RepositoryAnalyzer:
         file_data = self._gather_file_info()
         files_info = file_data["files"]
 
-        gradle_info = self._check_for_gradle()
-        hobo_info = self._check_for_hobo()
+        # Detect build system and custom tools
+        build_system = self._detect_build_system(files_info)
+        custom_tools = self._detect_custom_tools(files_info)
 
         # Find and analyze any README files in the repository (not just root)
         readme_files = []
@@ -429,11 +557,18 @@ class RepositoryAnalyzer:
             if file_path.lower().endswith("readme.md"):
                 readme_files.append(file_path)
                 try:
-                    full_path = self.config.target_repo / file_path
-                    content = full_path.read_text(encoding="utf-8", errors="ignore")
+                    content = file_info.get("content", "")
+                    if not content:
+                        full_path = self.config.target_repo / file_path
+                        content = full_path.read_text(encoding="utf-8", errors="ignore")
                     readme_contents[file_path] = content
                 except Exception as e:
                     logging.warning(f"Error reading README at {file_path}: {str(e)}")
+
+        # Perform deep code analysis
+        code_understanding = self.code_analyzer.analyze_code_understanding(
+            files_info, self.config.target_repo
+        )
 
         # Analyze repository
         self.repo_info = {
@@ -446,43 +581,37 @@ class RepositoryAnalyzer:
             "dependencies": self._find_dependencies(files_info),
             "readme_files": readme_files,
             "readme_contents": readme_contents,
-            "gradle_info": gradle_info,
-            "hobo_info": hobo_info,
-            "file_breakdown": {lang: sum(1 for f in files_info if f["language"] == lang)
-                               for lang in set(f["language"] for f in files_info)}
+            "build_system": build_system,
+            "custom_tools": custom_tools,
+            "code_understanding": code_understanding,
+            "file_breakdown": {
+                lang: sum(1 for f in files_info if f["language"] == lang)
+                for lang in set(f["language"] for f in files_info)
+            },
         }
 
         self.analyzed = True
 
-        build_system_info = ""
-        if gradle_info["is_gradle"]:
-            if gradle_info["has_gradle_wrapper"]:
-                commands = "\n".join([f"- `{cmd}`" for cmd in gradle_info["gradle_commands"]])
-                build_system_info += f"""
-        ## Build System: Gradle with Wrapper
-        This project uses Gradle with the Gradle Wrapper. Recommended commands:
-        {commands}
-        Note: Always use `./gradlew` instead of `gradle` to ensure consistent builds.
-        """
-            else:
-                build_system_info += "\n## Build System: Gradle\nThis project uses Gradle."
-
-        if hobo_info["uses_hobo"]:
-            build_system_info += f"""
-        ## Hobo Deployment
-        This project appears to use the company's Hobo tool for containerization.
-        You may be able to run it using the `hoboRun` command.
-        """
-
         try:
-            file_distribution = "\n".join([
-                f"- {lang}: {count} files"
-                for lang, count in sorted(self.repo_info['file_breakdown'].items(),
-                                          key=lambda x: x[1], reverse=True)
-            ])
+            file_distribution = "\n".join(
+                [
+                    f"- {lang}: {count} files"
+                    for lang, count in sorted(
+                        self.repo_info["file_breakdown"].items(),
+                        key=lambda x: x[1],
+                        reverse=True,
+                    )
+                ]
+            )
 
-            entry_points_text = "\n".join([f"- {ep}" for ep in self.repo_info["entry_points"]]) or "None found"
-            key_files_text = "\n".join([f"- {kf}" for kf in self.repo_info["key_project_files"]]) or "None found"
+            entry_points_text = (
+                "\n".join([f"- {ep}" for ep in self.repo_info["entry_points"]])
+                or "None found"
+            )
+            key_files_text = (
+                "\n".join([f"- {kf}" for kf in self.repo_info["key_project_files"]])
+                or "None found"
+            )
 
             # Handle READMEs found in the repository (not in root)
             readme_analysis = ""
@@ -504,16 +633,19 @@ class RepositoryAnalyzer:
                     """
                 )
 
-                readme_list = "\n\n".join([
-                    f"## README from {path}:\n{content}"
-                    for path, content in readme_contents.items()
-                ])
+                readme_list = "\n\n".join(
+                    [
+                        f"## README from {path}:\n{content}"
+                        for path, content in readme_contents.items()
+                    ]
+                )
 
-                readme_analysis = self.llm.invoke(
+                response = self.llm.invoke(
                     readme_prompt.format(readme_list=readme_list)
-                ).content
+                )
+                readme_analysis = response.content  # Extract content from AIMessage
 
-            # Enhanced prompt that includes any README info
+            # Enhanced prompt that includes code understanding
             analysis_prompt = PromptTemplate.from_template(
                 """Analyze the following repository information to understand its purpose and structure:
 
@@ -532,6 +664,13 @@ class RepositoryAnalyzer:
                 Entry Points:
                 {entry_points}
 
+                Build System: {build_system}
+                
+                Custom Tools: {custom_tools}
+
+                # Deep Code Analysis
+                {code_understanding}
+
                 Based on this information, provide a comprehensive analysis of:
                 1. What this repository does
                 2. Its key components and features
@@ -539,8 +678,8 @@ class RepositoryAnalyzer:
                 4. Installation and usage patterns
                 5. Any notable design patterns or architectural decisions
 
-                Be specific and focus on what can be inferred from the codebase structure
-                and any documentation found.
+                Be specific and focus on what can be inferred from the codebase structure,
+                actual functionality, and any documentation found.
                 """
             )
 
@@ -550,6 +689,16 @@ class RepositoryAnalyzer:
             else:
                 readme_section = "No README files found in the repository."
 
+            # Prepare build system info
+            build_system_text = f"{build_system['type'].capitalize()}"
+            if build_system["has_wrapper"]:
+                build_system_text += " with wrapper"
+
+            # Prepare custom tools info
+            custom_tools_text = ", ".join(custom_tools.get("custom_tools", []))
+            if not custom_tools_text:
+                custom_tools_text = "None detected"
+
             analysis_text = analysis_prompt.format(
                 repo_name=self.repo_info["name"],
                 primary_language=self.repo_info["primary_language"],
@@ -557,15 +706,21 @@ class RepositoryAnalyzer:
                 readme_section=readme_section,
                 key_files=key_files_text,
                 file_distribution=file_distribution,
-                entry_points=entry_points_text
+                entry_points=entry_points_text,
+                build_system=build_system_text,
+                custom_tools=custom_tools_text,
+                code_understanding=code_understanding,
             )
 
-            enhanced_analysis = self.llm.invoke(analysis_text).content
+            response = self.llm.invoke(analysis_text)
+            enhanced_analysis = response.content
             self.repo_info["analysis"] = enhanced_analysis
 
         except Exception as e:
             logging.error(f"Error generating repository analysis: {e}")
-            self.repo_info["analysis"] = "Analysis could not be generated due to an error."
+            self.repo_info["analysis"] = (
+                "Analysis could not be generated due to an error."
+            )
 
         return self._format_repo_info()
 
@@ -584,7 +739,9 @@ class RepositoryAnalyzer:
             "\n## File Breakdown",
         ]
 
-        for lang, count in sorted(info['file_breakdown'].items(), key=lambda x: x[1], reverse=True):
+        for lang, count in sorted(
+            info["file_breakdown"].items(), key=lambda x: x[1], reverse=True
+        ):
             result.append(f"- {lang}: {count} files")
 
         if info["entry_points"]:

@@ -1,4 +1,4 @@
-"""Main README generator implementation."""
+"""Main README generator implementation with enhanced code understanding."""
 
 import os
 import logging
@@ -11,9 +11,11 @@ from config import GeneratorConfig
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
+from openai import OpenAI
+
 
 class ReadmeGenerator:
-    """Generates README documentation using AI-powered prompts."""
+    """Generates README documentation using AI-powered prompts with code understanding."""
 
     def __init__(self, config: GeneratorConfig) -> None:
         """Initialize the README generator.
@@ -26,21 +28,26 @@ class ReadmeGenerator:
         self.llm = ChatOpenAI(model=config.model, temperature=0)
         self._has_checked_skipped = False
 
-        # Define the context-gathering prompt template for previous outputs
+        # Enhanced prompt for technical audience
         self.context_prompt = PromptTemplate.from_template(
-            """You are assisting in generating a README for a code repository.
-            
+            """You are assisting in generating a README for a code repository. Your audience consists of 
+            experienced engineers and developers who are familiar with standard development practices.
+
             # Previous Outputs
             {previous_context}
-            
+
             # Repository Analysis
             {repo_analysis}
-            
+
+            # Code Understanding
+            {code_understanding}
+
             # Current Task
             {current_prompt}
-            
-            Produce the output for this step, incorporating information from previous steps and repository analysis.
-            Focus on generating content that will be useful for users of this repository.
+
+            Focus on generating content that will be useful for experienced engineers and developers.
+            Base your answers on the actual code functionality and architecture, not basic usage.
+            Include only ./gradlew and hoboRon commands where applicable, omit other basic instructions.
             """
         )
 
@@ -74,8 +81,11 @@ class ReadmeGenerator:
             List of valid step file paths
         """
         # Get all potential step files (with numeric prefix)
-        step_files = [f for f in self.config.prompts_dir.glob("[0-9][0-9]-*.md")
-                     if self.extract_step_number(f) > 0]
+        step_files = [
+            f
+            for f in self.config.prompts_dir.glob("[0-9][0-9]-*.md")
+            if self.extract_step_number(f) > 0
+        ]
 
         # Filter out .SKIP files
         valid_files = [f for f in step_files if ".SKIP." not in f.name]
@@ -153,54 +163,27 @@ class ReadmeGenerator:
         # Get repository analysis
         repo_analysis = self.analyzer.analyze_repository(update=False)
 
+        # Extract code understanding from repository analysis
+        code_understanding = self.analyzer.repo_info.get(
+            "code_understanding", "No code understanding analysis available."
+        )
+
         try:
-            gradle_info = self.analyzer.repo_info.get("gradle_info", {})
-            hobo_info = self.analyzer.repo_info.get("hobo_info", {})
-
-            build_system_notes = ""
-            if gradle_info.get("is_gradle", False):
-                build_system_notes += "\nThis project uses Gradle. "
-                if gradle_info.get("has_gradle_wrapper", False):
-                    commands = ", ".join([f"`{cmd}`" for cmd in gradle_info.get("gradle_commands", [])])
-                    build_system_notes += f"You should use the Gradle Wrapper (`./gradlew`) instead of regular Gradle. Common commands: {commands}"
-
-            if hobo_info.get("uses_hobo", False):
-                build_system_notes += "\nThis project uses the company's Hobo tool for containerization. Consider using `hoboRun` command."
-
-            # Update context prompt to include build system notes
-            enhanced_prompt = self.context_prompt.from_template(
-                """You are assisting in generating a README for a code repository.
-
-                # Previous Outputs
-                {previous_context}
-
-                # Repository Analysis
-                {repo_analysis}
-
-                # Build System Information
-                {build_system_notes}
-
-                # Current Task
-                {current_prompt}
-
-                Produce the output for this step, incorporating information from previous steps and repository analysis.
-                Focus on generating content that will be useful for users of this repository.
-                If applicable, include the build system information in your response.
-                """
-            )
-
-            formatted_prompt = enhanced_prompt.format(
+            # Format the prompt with enhanced code understanding
+            formatted_prompt = self.context_prompt.format(
                 previous_context=previous_context,
                 repo_analysis=repo_analysis,
-                build_system_notes=build_system_notes,
-                current_prompt=prompt_content
+                code_understanding=code_understanding,
+                current_prompt=prompt_content,
             )
 
             # Generate response using LLM
             response = self.llm.invoke(formatted_prompt)
+            # Make sure we extract the content from the AIMessage
+            response_content = response.content
 
             # Write to output file
-            output_file.write_text(response.content)
+            output_file.write_text(response_content)
 
             logging.info(f"Successfully processed step {step_num}")
             return True
@@ -217,19 +200,17 @@ class ReadmeGenerator:
             raise FileNotFoundError("No output files found to create README from")
 
         # Sort by step number
-        existing_outputs.sort(key=lambda p: int(p.stem.split('_')[1]))
+        existing_outputs.sort(key=lambda p: int(p.stem.split("_")[1]))
 
         # Read content from all files
         step_outputs = []
         for output_file in existing_outputs:
             try:
-                step_num = int(output_file.stem.split('_')[1])
+                step_num = int(output_file.stem.split("_")[1])
                 content = output_file.read_text()
-                step_outputs.append({
-                    "step": step_num,
-                    "file": output_file.name,
-                    "content": content
-                })
+                step_outputs.append(
+                    {"step": step_num, "file": output_file.name, "content": content}
+                )
                 logging.info(f"Included content from: {output_file}")
             except Exception as e:
                 logging.warning(f"Could not read {output_file}: {e}")
@@ -238,57 +219,79 @@ class ReadmeGenerator:
             raise FileNotFoundError("No valid content found in output files")
 
         try:
-            # Create a more comprehensive prompt that emphasizes content preservation
+            # Create a more focused prompt for technical audience
             final_prompt = PromptTemplate.from_template(
-                """You are compiling the final README.md for a software project based on several 
-                section drafts. Your task is to combine these sections into a cohesive, 
-                well-structured document while PRESERVING AS MUCH CONTENT AS POSSIBLE.
+                """You are compiling a technical README.md for a software project. Your audience consists of 
+                experienced engineers and developers who are familiar with standard development practices 
+                and internal company libraries.
 
-                # Important Instructions:
-                1. RETAIN all substantive information from each section
-                2. DO NOT summarize or condense the technical details
-                3. Maintain comprehensive installation steps, code examples, and usage instructions
-                4. Ensure the final README is comprehensive and detailed
-                5. Structure with clear headings and proper Markdown formatting
-                6. Fix any redundancies or contradictions between sections
-                7. The README should be thorough - length is not a concern
-                8. DO NOT include any backticks for markdown formatting in your response
+                # Key Instructions:
+                1. Focus on WHAT the repository does and WHY it exists
+                2. Highlight technical architecture and design decisions
+                3. Document only non-obvious configuration or setup requirements
+                4. Assume the audience knows:
+                   - Basic development tools and practices
+                   - How to use git, gradle, maven, npm etc.
+                   - Standard CI/CD processes
+                5. Use clear, concise technical language
+                6. Remove any obvious or basic instructions, with these exceptions:
+                   - Include './gradlew build' and './gradlew clean build' if it's a Gradle project
+                   - Include 'hoboRon' commands if Hobo deployment is configured
+                   - Remove all other basic git/gradle/maven/npm commands
+                7. DO NOT include notes about AI generation
+                8. DO NOT include generic summaries at the end
+
+                # Code Understanding:
+                {code_understanding}
 
                 # Sections to Compile:
                 {sections}
 
-                Produce a complete, well-organized README.md that includes ALL the important 
-                information from these sections. Your goal is thoroughness and clarity, not brevity.
+                Produce a streamlined, technical README.md that explains what this repository is for 
+                and how it works. Focus on architecture, design decisions, and non-obvious technical details.
                 """
             )
 
-            # Format the sections with clear separation
-            formatted_sections = "\n\n" + "\n\n".join([
-                f"## Section {s['step']}: {s['file']}\n{s['content']}"
-                for s in step_outputs
-            ])
+            # Get code understanding from repository analysis
+            code_understanding = self.analyzer.repo_info.get(
+                "code_understanding", "No code understanding analysis available."
+            )
 
-            # Generate final README with emphasis on content preservation
-            readme_content = self.llm.invoke(
-                final_prompt.format(sections=formatted_sections)
-            ).content
+            # Format the sections with clear separation
+            formatted_sections = "\n\n".join(
+                [
+                    f"## Section {s['step']}: {s['file']}\n{s['content']}"
+                    for s in step_outputs
+                ]
+            )
+
+            # Generate final README with emphasis on technical content
+            response = self.llm.invoke(
+                final_prompt.format(
+                    code_understanding=code_understanding, sections=formatted_sections
+                )
+            )
+            readme_content = response.content
 
             # Remove any ```markdown or ``` tags that might be in the response
-            readme_content = re.sub(r'^```markdown\s*', '', readme_content)
-            readme_content = re.sub(r'\s*```$', '', readme_content)
+            readme_content = re.sub(r"^```markdown\s*", "", readme_content)
+            readme_content = re.sub(r"\s*```$", "", readme_content)
 
-            # Add disclosure about AI generation with proper spacing
+            lines = readme_content.split("\n")
+            title_index = next(
+                (i for i, line in enumerate(lines) if line.startswith("# ")), 0
+            )
+
             disclosure = "\n> **Note:** This README was automatically generated using AI. While we've made every effort to ensure its accuracy, there may be mistakes or omissions. Please verify critical information before use."
 
-            # Insert the disclosure after the first heading (title)
-            lines = readme_content.split('\n')
-            title_index = next((i for i, line in enumerate(lines) if line.startswith('# ')), 0)
             if title_index < len(lines) - 1:
-                lines.insert(title_index + 1, disclosure)  # +1 to place right after title
+                lines.insert(
+                    title_index + 1, disclosure
+                )  # +1 to place right after title
             else:
                 lines.insert(0, disclosure)
 
-            readme_content = '\n'.join(lines)
+            readme_content = "\n".join(lines)
 
             # Create the combined README
             target_readme = self.config.target_repo / "ai.README.md"
@@ -317,25 +320,31 @@ class ReadmeGenerator:
                 except Exception as e:
                     logging.warning(f"Failed to remove {file}: {e}")
 
-            logging.info(f"Successfully cleaned up {len(step_files)} intermediate files")
+            logging.info(
+                f"Successfully cleaned up {len(step_files)} intermediate files"
+            )
 
         except Exception as e:
             logging.error(f"Error during cleanup: {e}")
 
+    # In readme_generator.py, update the run() method:
+
     def run(self) -> None:
         """Main execution flow."""
         try:
-            # Validate configuration
             self.config.validate()
 
             # Change to target repo directory
             os.chdir(self.config.target_repo)
 
-            # First run the analyzer to check for existing README
+            # First... run the analyzer to check for existing README
             analysis_result = self.analyzer.analyze_repository()
 
             # Check if we should skip processing due to existing README
-            if isinstance(analysis_result, str) and "Non-empty README already exists" in analysis_result:
+            if (
+                isinstance(analysis_result, str)
+                and "Non-empty README already exists" in analysis_result
+            ):
                 logging.info(analysis_result)
                 return
 
@@ -380,8 +389,12 @@ class ReadmeGenerator:
             if not self.config.only_mode and processed_any:
                 self.finalize_readme()
 
-                if not self.config.keep_steps:  # Only clean up if --keep-steps wasn't specified
+                # Only clean up if keep_steps flag is False
+                if not self.config.keep_steps:
                     self.cleanup_step_files()
+                    logging.info("Intermediate step files have been cleaned up")
+                else:
+                    logging.info("Keeping intermediate step files as requested")
 
             # Log results
             if failed_steps:

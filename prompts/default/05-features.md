@@ -1,19 +1,13 @@
 Review all previous output from previous steps.
 
-List the main features and functionalities of the project. Highlight core modules, APIs, or services and explain their roles. Include:
+Document the technical features and capabilities of this repository. Focus on:
+1. Core technical functionality and implementation details
+2. Key architectural decisions and patterns
+3. Integration points with other systems
+4. Non-obvious configuration requirements
+5. Performance considerations or limitations
 
-1. Core functionality described in the code
-2. Features defined in configuration files (especially YAML configurations)
-3. CI/CD pipelines and deployment specifications
-4. Environment configurations and options
-5. Integration points with other systems
-
-For YAML configuration files, extract and explain:
-- Environment variables and configuration options
-- Deployment strategies
-- Resource allocations and scaling options
-- Integration settings
-
+Skip obvious features or standard development practices.
 Write your findings in markdown format to ./output/step_05_output.md.
 
 DO NOT MODIFY ANY FILE OTHER THAN ./output/step_05_output.md.
