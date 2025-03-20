@@ -7,8 +7,4 @@ Document the testing infrastructure and procedures for this project. Include:
 - Test configuration requirements
 - Instructions for writing new tests
 
-Write your findings in markdown format to ./output/step_08_output.md.
-
-DO NOT MODIFY ANY FILE OTHER THAN ./output/step_08_output.md.
-
-You can ask me to include any files that aren't already added to the context.
+Write your findings in markdown format to ./output/step_03_output.md.

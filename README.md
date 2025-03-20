@@ -1,103 +1,100 @@
 # AI README Generator
 
-A tool for automatically generating README files for code repositories using LLM analysis.
+A tool that automatically generates README files for code repositories by analyzing codebases with Large Language Models (LLMs).
 
 ## Overview
 
-This tool analyzes a target repository and generates a README.md file through a series of AI prompts.
-The system leverages LangChain and OpenAI's models to understand code structure, dependencies, and functionality.
+The AI README Generator analyzes Java/Gradle/Spring Boot repositories to:
+1. Understand project purpose and functionality
+2. Determine how to run and configure the application
+3. Generate comprehensive, usable README documentation
+4. Optimize existing READMEs or create new ones from scratch
+> Note: Currently focused on Java/Gradle/Spring Boot repositories. Support for additional languages is planned in upcoming releases.
 
-## Key Components
-
-- **Repository Analysis**: Scans repository structure, detects languages, entry points, and key files
-- **Step-Based Processing**: Runs sequential prompts to generate different sections of documentation
-- **Context Management**: Each step builds on previous steps' outputs for comprehensive documentation
-- **Company-Specific Features**: Special handling for Gradle projects and Hobo deployments
-
-## Technical Architecture
-
-The project consists of three main components:
-
-1. **Configuration Management** (`config.py`): Handles paths, command-line arguments and validation
-2. **Repository Analyzer** (`analyzer.py`): Scans and analyzes repository structure  
-3. **README Generator** (`readme_generator.py`): Orchestrates the generation process through steps
-
-## Technical Details
-
-### Repository Analysis
-
-The analyzer detects:
-- Programming languages and their distribution
-- Entry points and executables
-- Configuration files and dependencies
-- Build systems (especially Gradle)
-- Company-specific deployment tools (Hobo)
-
-It specifically handles:
-- Key project files (README, build configs, etc.)
-- Non-empty existing READMEs
-- READMEs in non-root locations
-- Gradle wrapper detection with proper command suggestions
-
-### Prompt Processing
-
-The generator:
-1. Reads prompt files in order (01-project-overview.md, 02-components-tech.md, etc.)
-2. Creates context from previous steps
-3. Applies repository analysis information
-4. Generates section content
-5. Combines sections into a final README
-6. Cleans up intermediate files
+It's specifically designed for Java Spring Boot projects but includes extensible support for other languages.
 
 ## Requirements
 
-- Python 3.10+
-- OpenAI API key
-- LangChain
-- Pipenv
+- API access to LLM services (via Indeed's internal LLM proxy)
 
-## Setup
+## Installation
 
 1. Clone the repository:
    ```bash
-   git clone <repo-url>
-   cd ai-readme-generator
+   git clone git@code.corp.indeed.com:ai4dp/ai-readme-generation.git
+   cd ai-readme-generation
    ```
 
-2. Install dependencies:
+2. Install dependencies with Poetry:
    ```bash
-   pipenv install
+   poetry install
    ```
 
-3. Create `.env` file with your OpenAI API key:
+## Environment Setup
+
+1. Copy the example environment file:
+   ```bash
+   cp example.env .env
    ```
-   OPENAI_API_KEY=your_api_key_here
+
+2. Obtain an API key from Indeed's LLM proxy:
+   - Create/manage keys: https://llm-proxy.sandbox.indeed.net/manage/selfserve/createldapkeys
+   - Add your key to the `.env` file
+
+3. Ensure your `.env` contains:
    ```
+   LLM_KEY=your_api_key_here
+   LLM_KEY_ORGANIZATION=your_org_id_here
+   OPENAI_BASE_URL=https://llm-proxy.sandbox.indeed.net/bedrock/v1/
+   ```
+
+## Supported Models
+
+The application supports both Claude and OpenAI models:
+
+- **Claude (Default)**: `us.anthropic.claude-3-5-sonnet-20241022-v2:0` - Uses the `CLAUDE_BASE_URL` endpoint
+- **OpenAI**: `gpt-4o` - Uses the `OPENAI_BASE_URL` endpoint
 
 ## Usage
 
-Basic usage:
-```bash
-pipenv run python main.py -r /path/to/your/repository
-```
+### Quick Start
 
-Advanced options:
 ```bash
+# Basic usage (uses Claude by default)
+poetry run python src/main.py -r /path/to/your/repository
+
+# Use GPT-4o instead of Claude
+poetry run python src/main.py -r /path/to/repo -m gpt-4o
+
 # Use a specific prompt collection
-pipenv run python main.py -r /path/to/repo -c custom_prompts
+poetry run python src/main.py -r /path/to/repo -c custom_prompts
 
 # Start from a specific step
-pipenv run python main.py -r /path/to/repo -s 3
+poetry run python src/main.py -r /path/to/repo -s 3
 
 # Run only a specific step
-pipenv run python main.py -r /path/to/repo -s 5 -o
-
-# Use a different AI model
-pipenv run python main.py -r /path/to/repo -m gpt-4-turbo
+poetry run python src/main.py -r /path/to/repo -s 5 -o
 
 # Keep intermediate output files
-pipenv run python main.py -r /path/to/repo --keep-steps
+poetry run python src/main.py -r /path/to/repo --keep-steps
+
+# Save intermediate files for debugging
+poetry run python src/main.py -r /path/to/repo --save-intermediates
 ```
+
+### Docker Usage
+
+You can also run the tool in a Docker container:
+
+```bash
+# Build the Docker image
+./build.sh
+
+# Run the container on a local repository
+./container-run.sh /path/to/repository
+```
+
+### Command Line Options
 
 | Option | Description |
 |--------|-------------|
@@ -105,83 +102,111 @@ pipenv run python main.py -r /path/to/repo --keep-steps
 | `-c, --collection` | Prompt collection to use (default: "default") |
 | `-s, --step` | Step number to start from |
 | `-o, --only` | Run only specific step |
-| `-m, --model` | OpenAI model to use (default: "gpt-4o") |
-| `--keep-steps` | Keep intermediate step output files after generation |
+| `-m, --model` | Model to use (default: "us.anthropic.claude-3-5-sonnet-20241022-v2:0", options: "us.anthropic.claude-3-5-sonnet-20241022-v2:0", "gpt-4o") |
+| `--keep-steps` | Keep intermediate step output files |
+| `--language` | Force specific language analyzer (auto, java, python, javascript) |
+| `--log-level` | Set logging level (DEBUG, INFO, WARNING, ERROR) |
+| `--save-intermediates` | Save intermediate files for debugging |
+
+## Sourcegraph Integration
+
+This tool is designed to run as a batch operation on Sourcegraph, enabling automated README generation across multiple repositories.
+
+### Deploying to Sourcegraph
+
+1. Build and push the Docker image:
+   ```bash
+   ./build-and-push.sh
+   ```
+   Note: Update the version number in both `build-and-push.sh` and `batch-spec.yml` when making changes.
+
+2. Configure the `batch-spec.yml` file to target the desired repositories.
+
+3. Run the batch change from Sourcegraph.
+
+### Troubleshooting Sourcegraph Deployments
+
+If you encounter issues when running on Sourcegraph:
+
+1. The Docker container may need specific environment adjustments. The `execute.sh` script has been modified to install dependencies at runtime to ensure compatibility.
+
+2. Ensure path resolution is working correctly. The script sets `PYTHONPATH=/app` to help Python find modules correctly within the container.
+
+3. Check that all required dependencies are available in the container. The `execute.sh` script installs packages from `requirements.frozen` at runtime.
 
 ## How It Works
 
-1. **Initialization**:
-   - Parses arguments including the new `--keep-steps` flag
-   - Creates configuration
-   - Validates directories
+The README generator uses a multi-step process to analyze code and generate documentation:
 
-2. **Repository Analysis**:
-   - Checks for existing README
-   - Analyzes file structure
-   - Identifies languages and entry points
-   - Detects Gradle and Hobo configuration
+1. **Code Analysis**: Examines repository structure, detects framework usage (Spring Boot, Gradle), identifies entry points, configuration files, shell scripts, and more.
 
-3. **Step Processing**:
-   - Processes prompt files sequentially
-   - Uses repository analysis as context
-   - Generates section-specific content
-   - Saves output to step files (named `step_XX_output.md`)
+2. **Project Purpose Analysis (Step 1)**: Determines the core functionality and purpose of the application.
 
-4. **README Compilation**:
-   - Combines all step outputs
-   - Uses LLM to structure and format
-   - Adds AI-generated disclosure note
-   - Writes final `ai.README.md`
-   - Cleans up intermediate files (unless `--keep-steps` was specified)
+3. **Usage Instructions Generation (Step 2)**: Creates detailed instructions for running, configuring, and using the application.
 
-The generator will automatically clean up the intermediate step files after generating the final README. If you need to retain these files for debugging or reference, use the `--keep-steps` flag.
+4. **Draft README Creation (Step 3)**: Combines the previous analyses into a complete README draft.
 
-## Customization
+5. **README Optimization (Step 4)**: Evaluates any existing README and decides whether to enhance it or replace it with the generated version.
 
-### Custom Prompt Collections
+The tool uses language-specific analyzers (currently Java-focused) to detect project structure and critical components.
 
-Create a new directory in `prompts/` with your custom prompts:
-```
-prompts/
-  default/
-    01-project-overview.md
-    02-components-tech.md
-    ...
-  custom/
-    01-my-custom-prompt.md
-    ...
-```
+## Architecture
 
-### Skip Specific Steps
+The system consists of several key components:
 
-Add `.SKIP.` to any prompt filename to skip that step:
-```
-03-architecture.SKIP.md
-```
+- **Analyzers**: Language-specific modules that understand code structure.
+  - `BaseAnalyzer`: Core analysis functionality
+  - `JavaAnalyzer`: Java/Spring Boot/Gradle specific analysis
+  - `CodeUnderstandingAnalyzer`: Focuses on purpose and functionality analysis
 
-## Troubleshooting
+- **ReadmeGenerator**: Main orchestration class that manages the multi-step process.
 
-- **API Key Issues**: Ensure your OpenAI API key is correctly set in `.env`
-- **Model Selection**: For larger repositories, use models with higher context windows
-- **Permission Errors**: Ensure write permissions in target output directory
+- **Utilities**:
+  - `CustomChatOpenAI`: Enhanced LLM integration that works with both OpenAI and Claude
+  - `IntermediateFileManager`: Handles saving intermediate files for debugging
+  - Various utility classes for file handling and analysis
 
-## Development and Debugging
+- **Configuration**: Manages settings through the `GeneratorConfig` class.
 
-When developing or troubleshooting:
+## Prompt System
 
-1. **Examining Intermediate Files**:
-   - Use the `--keep-steps` flag to preserve step output files
-   - Each step produces a separate markdown file in the `/output` directory
-   - Files follow the naming convention `step_XX_output.md`
+The generator uses a structured prompting system with four main steps:
 
-2. **Step Processing**:
-   - Each prompt focuses on a specific aspect of the README
-   - Step files show exactly what content was generated at each stage
-   - Debugging individual steps can help identify issues in prompt design
+1. **Project Purpose** (Step 1): Analyzes what the code does and who it's for
+2. **Usage Instructions** (Step 2): Determines how to run, configure, and use the application
+3. **Draft README** (Step 3): Creates a complete README document
+4. **Final README** (Step 4): Optimizes based on any existing README content
 
-3. **Understanding Cleanup**:
-   - By default, intermediate files are removed after successful generation
-   - The cleanup happens in the `cleanup_step_files()` method
-   - Only files matching the pattern `step_*.output.md` are removed
+Each step builds on the previous ones, with the LLM receiving carefully structured context about the repository.
 
-If you're creating custom prompts or modifying the generator logic, keeping the intermediate files can help you understand how each step contributes to the final output.
+### Extending Language Support
+
+The system can be extended to support other languages by creating additional analyzer classes similar to JavaAnalyzer. The BaseAnalyzer provides core functionality that can be inherited and specialized. Implementation of Python and JavaScript analyzers is scheduled for upcoming commits.
+
+## Output and Artifacts
+
+By default, the tool generates:
+
+- `README.md` in the target repository directory
+
+With `--save-intermediates` flag, it also saves:
+- Step outputs: Files showing the output of each generation step
+- Context files: JSON files with the context provided to the LLM
+- Prompt files: The actual prompts sent to the LLM
+
+## Support
+
+For questions or issues:
+- For LLM proxy access issues, reach out in #help-llm
+- For application issues, create a ticket or contact the AI4DP team
+
+## Development
+
+### Future Enhancements
+
+- Add support for Python and JavaScript projects
+
+#### Nice to haves for upcoming changes
+- Extract repository ownership information and include it in the generated README
+- Improve detection of project dependencies and requirements
+- Enhance the ability to understand API endpoints and documentation
