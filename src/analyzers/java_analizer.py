@@ -184,11 +184,6 @@ class JavaAnalyzer(BaseAnalyzer):
             score += 70
         elif "docker-compose.yml" in path.lower():
             score += 75
-
-        # Hobo-related files and directories
-        if "hobo" in path:
-            score += 80
-
         # Check content for key indicators (if content is available)
         if content:
             # For Java files
@@ -334,54 +329,6 @@ class JavaAnalyzer(BaseAnalyzer):
                     # For commands that are strings
                     build_commands_text += f"- {cmd_name}: `{cmd_value}`\n"
 
-        # Hobo info
-        hobo_text = ""
-        hobo_config = info.get("hobo_config", {})
-        if hobo_config.get("enabled"):
-            hobo_text = "\n\nHobo Configuration:\n"
-            if hobo_config.get("has_docker_compose"):
-                hobo_text += "- Uses docker-compose\n"
-            if hobo_config.get("has_dockerfile"):
-                hobo_text += "- Uses Dockerfile\n"
-            if hobo_config.get("services"):
-                hobo_text += (
-                    f"- Services: {', '.join(hobo_config.get('services', []))}\n"
-                )
-
-            # Add hobo shell scripts section
-            hobo_shell_scripts = hobo_config.get("shell_scripts", [])
-            if hobo_shell_scripts:
-                hobo_text += "\nHobo Shell Scripts:\n"
-                for script in hobo_shell_scripts:
-                    hobo_text += f"- {script}\n"
-
-            # Add run scripts
-            run_scripts = hobo_config.get("run_scripts", [])
-            if run_scripts:
-                hobo_text += "\nRun scripts:\n"
-                for script in run_scripts:
-                    hobo_text += f"- {script}\n"
-
-            # Add auxiliary scripts
-            aux_scripts = hobo_config.get("auxiliary_scripts", [])
-            if aux_scripts:
-                hobo_text += "\nAuxiliary scripts:\n"
-                for script in aux_scripts:
-                    hobo_text += f"- {script}\n"
-
-            # Add start/stop commands
-            hobo_commands = hobo_config.get("commands", {})
-            if hobo_commands:
-                if hobo_commands.get("start"):
-                    hobo_text += "\nStart commands:\n"
-                    for cmd in hobo_commands.get("start", []):
-                        hobo_text += f"- `{cmd}`\n"
-
-                if hobo_commands.get("stop"):
-                    hobo_text += "\nStop commands:\n"
-                    for cmd in hobo_commands.get("stop", []):
-                        hobo_text += f"- `{cmd}`\n"
-
         api_patterns_text = ""
         if "api_patterns" in info:
             api_patterns = info.get("api_patterns", [])
@@ -487,7 +434,6 @@ class JavaAnalyzer(BaseAnalyzer):
     ### Tools and Technologies:
     {custom_tools_text}
     {root_shell_scripts_text}
-    {hobo_text}
     {api_patterns_text}
     {usage_patterns_text}
     """
@@ -548,19 +494,6 @@ class JavaAnalyzer(BaseAnalyzer):
                 else:
                     # For commands that are strings
                     result.append(f"- {cmd_name}: `{cmd_value}`")
-
-        # Add Hobo commands if available
-        hobo_config = info.get("hobo_config", {})
-        if hobo_config and hobo_config.get("enabled"):
-            result.append("\n### Hobo Commands")
-            for cmd_type, cmds in hobo_config.get("commands", {}).items():
-                if cmds:
-                    for i, cmd in enumerate(cmds[:3]):  # Limit to top 3
-                        result.append(f"- {cmd_type}: `{cmd}`")
-                    if len(cmds) > 3:
-                        result.append(
-                            f"  ... and {len(cmds) - 3} more {cmd_type} commands"
-                        )
 
         # Add dependencies (limit to top 10)
         if info.get("dependencies"):
@@ -623,19 +556,6 @@ class JavaAnalyzer(BaseAnalyzer):
             for f in files_info
             if f["language"] == "Gradle" or f["path"].endswith(".gradle")
         ]
-
-        # Filter shell scripts to EXCLUDE hobo shell scripts
-        hobo_config = self._detect_hobo_configuration(self.config.target_repo)
-        hobo_shell_scripts = hobo_config.get("shell_scripts", [])
-
-        # Only include shell scripts that aren't in hobo directories
-        shell_scripts = [
-            f["path"]
-            for f in files_info
-            if f["path"].endswith(".sh")
-            and not any(f["path"].startswith("hobo/") for path in hobo_shell_scripts)
-        ]
-
         build_system = self._detect_build_system(files_info)
         dependencies = self._find_dependencies(files_info)
         custom_tools = self._detect_custom_tools(files_info)
@@ -643,9 +563,6 @@ class JavaAnalyzer(BaseAnalyzer):
         return {
             "java_files": java_files,
             "gradle_files": gradle_files,
-            "shell_scripts": shell_scripts,  # This now excludes hobo shell scripts
-            "build_system": build_system,
-            "hobo_config": hobo_config,
             "dependencies": dependencies,
             "custom_tools": custom_tools,
         }
@@ -739,7 +656,6 @@ class JavaAnalyzer(BaseAnalyzer):
 
         gradlew_file = self.config.target_repo / "gradlew"
 
-        # Find root shell scripts first (outside of hobo directory)
         for file_info in files_info:
             file_path = file_info["path"]
 
@@ -789,132 +705,6 @@ class JavaAnalyzer(BaseAnalyzer):
 
         return build_system
 
-    def _detect_hobo_configuration(self, target_repo: Path) -> Dict[str, Any]:
-        """Detect Hobo deployment configuration in the repository.
-
-        Args:
-            target_repo: Path to the repository root
-
-        Returns:
-            Dictionary with Hobo configuration information
-        """
-        hobo_config = {
-            "enabled": False,
-            "directories": [],
-            "has_dockerfile": False,
-            "has_docker_compose": False,
-            "files": [],
-            "services": [],
-            "commands": {"start": [], "stop": []},
-            "shell_scripts": [],
-            "run_scripts": [],
-            "auxiliary_scripts": [],
-        }
-
-        # Check if hobo directory exists
-        hobo_dir = target_repo / "hobo"
-        if not hobo_dir.exists() or not hobo_dir.is_dir():
-            return hobo_config
-
-        hobo_config["enabled"] = True
-        self.logger.debug("Hobo configuration detected")
-
-        # Find all subdirectories in hobo
-        for item in hobo_dir.iterdir():
-            if item.is_dir():
-                hobo_config["directories"].append(item.name)
-
-                # Check for Dockerfile or docker-compose.yml in each subdirectory
-                dockerfile = item / "Dockerfile"
-                docker_compose = item / "docker-compose.yml"
-                run_script = item / "run.sh"
-
-                if dockerfile.exists():
-                    hobo_config["has_dockerfile"] = True
-                    rel_path = str(dockerfile.relative_to(target_repo))
-                    hobo_config["files"].append(rel_path)
-
-                if docker_compose.exists():
-                    hobo_config["has_docker_compose"] = True
-                    rel_path = str(docker_compose.relative_to(target_repo))
-                    hobo_config["files"].append(rel_path)
-
-                    # Analyze docker-compose.yml
-                    try:
-                        with open(
-                            docker_compose, "r", encoding="utf-8", errors="ignore"
-                        ) as f:
-                            content = f.read()
-
-                        # Try to parse YAML
-                        try:
-                            compose_data = yaml.safe_load(content)
-
-                            if compose_data and "services" in compose_data:
-                                service_names = list(compose_data["services"].keys())
-                                hobo_config["services"].extend(service_names)
-                        except:
-                            # If yaml parsing fails, try with regex
-                            services = re.findall(
-                                r"^\s*(\w+):\s*$", content, re.MULTILINE
-                            )
-                            if services:
-                                hobo_config["services"].extend(services)
-
-                    except Exception as e:
-                        self.logger.warning(
-                            f"Error analyzing docker-compose file {docker_compose}: {str(e)}"
-                        )
-
-                # Add run.sh to shell scripts within hobo directory
-                if run_script.exists():
-                    rel_path = str(run_script.relative_to(target_repo))
-                    hobo_config["shell_scripts"].append(rel_path)
-                    hobo_config["run_scripts"].append(rel_path)
-                    hobo_config["files"].append(rel_path)
-
-                # Add other .sh files within this hobo subdirectory
-                for sh_file in item.glob("*.sh"):
-                    if sh_file != run_script:  # Skip run.sh as we already added it
-                        rel_path = str(sh_file.relative_to(target_repo))
-                        hobo_config["shell_scripts"].append(rel_path)
-                        hobo_config["auxiliary_scripts"].append(rel_path)
-                        hobo_config["files"].append(rel_path)
-
-        # Also check for docker-compose.yml directly in hobo directory
-        docker_compose = hobo_dir / "docker-compose.yml"
-        if docker_compose.exists():
-            hobo_config["has_docker_compose"] = True
-            rel_path = str(docker_compose.relative_to(target_repo))
-            hobo_config["files"].append(rel_path)
-
-        # Find all shell scripts within the hobo directory (not just subdirectories)
-        for sh_file in hobo_dir.glob("*.sh"):
-            rel_path = str(sh_file.relative_to(target_repo))
-            if rel_path not in hobo_config["shell_scripts"]:
-                hobo_config["shell_scripts"].append(rel_path)
-                hobo_config["run_scripts"].append(rel_path)
-                hobo_config["files"].append(rel_path)
-
-        # For any hobo shell scripts that have "start" in their name, add to start commands
-        # and for any that have "stop" in their name, add to stop commands
-        for script in hobo_config["shell_scripts"]:
-            script_name = Path(script).name.lower()
-            if "start" in script_name:
-                hobo_config["commands"]["start"].append(f"./{script}")
-            elif "stop" in script_name:
-                hobo_config["commands"]["stop"].append(f"./{script}")
-
-        # For any run scripts in hobo, add to start commands if not already added
-        for script in hobo_config["run_scripts"]:
-            script_cmd = f"./{script}"
-            if (
-                script_cmd not in hobo_config["commands"]["start"]
-                and "stop" not in Path(script).name.lower()
-            ):
-                hobo_config["commands"]["start"].append(script_cmd)
-
-        return hobo_config
 
     def _find_files_by_pattern(self, directory: Path, pattern: str) -> List[Path]:
         """Helper to find files matching a pattern in a directory.
@@ -974,11 +764,6 @@ class JavaAnalyzer(BaseAnalyzer):
                 if "spring-boot" not in custom_tools:
                     custom_tools.append("spring-boot")
 
-            # Check for Hobo
-            if "hobo" in file_path:
-                if "hobo" not in custom_tools:
-                    custom_tools.append("hobo")
-
             # Check for Gradle plugins
             if file_path.endswith(".gradle") and content:
                 # Look for specific plugins
@@ -1028,14 +813,6 @@ class JavaAnalyzer(BaseAnalyzer):
             result.append("\n## Build Commands")
             for cmd_name, cmd in build_system.get("commands", {}).items():
                 result.append(f"- {cmd_name}: `{cmd}`")
-
-        # Add Hobo commands if available
-        hobo_config = info.get("hobo_config", {})
-        if hobo_config and hobo_config.get("enabled"):
-            result.append("\n## Hobo Commands")
-            for cmd_name, cmds in hobo_config.get("commands", {}).items():
-                if cmds:
-                    result.append(f"- {cmd_name}: `{cmds[0]}`")
 
         # Add dependencies (limit to top 20)
         if info.get("dependencies"):

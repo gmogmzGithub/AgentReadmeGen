@@ -84,7 +84,6 @@ class JavaScriptAnalyzer(BaseAnalyzer):
 
         # Get shell scripts information from file_data
         root_shell_scripts = []
-        hobo_shell_scripts = []
         all_shell_scripts = []
 
         for f in files_info:
@@ -94,18 +93,14 @@ class JavaScriptAnalyzer(BaseAnalyzer):
                 # Check if it's in the root directory
                 if "/" not in f["path"] and "\\" not in f["path"]:
                     root_shell_scripts.append(f["path"])
+
+        build_system = self._detect_build_system(files_info)
                 # Check if it's in the hobo directory
                 elif f["path"].startswith("hobo/") or f["path"].startswith("hobo\\"):
                     hobo_shell_scripts.append(f["path"])
 
         build_system = self._detect_build_system(files_info)
         hobo_config = self._detect_hobo_configuration(self.config.target_repo)
-        dependencies = self._find_dependencies(files_info)
-        custom_tools = self._detect_custom_tools(files_info)
-
-        # Make sure build_system has the root shell scripts
-        build_system["shell_scripts"] = root_shell_scripts
-
         # Make sure hobo_config only has hobo shell scripts
         hobo_config["shell_scripts"] = hobo_shell_scripts
 
@@ -121,14 +116,7 @@ class JavaScriptAnalyzer(BaseAnalyzer):
                         filtered_cmds.append(cmd)
                 hobo_config["commands"][cmd_type] = filtered_cmds
 
-        return {
-            "java_files": java_files,
-            "gradle_files": gradle_files,
-            "shell_scripts": all_shell_scripts,
-            "root_shell_scripts": root_shell_scripts,
-            "hobo_shell_scripts": hobo_shell_scripts,
             "build_system": build_system,
-            "hobo_config": hobo_config,
             "dependencies": dependencies,
             "custom_tools": custom_tools,
         }
@@ -189,32 +177,6 @@ class JavaScriptAnalyzer(BaseAnalyzer):
             result.append("\n## Root Shell Scripts")
             for script in root_shell_scripts:
                 result.append(f"- {script}")
-
-        # Add Hobo commands if available
-        hobo_config = info.get("hobo_config", {})
-        if hobo_config and hobo_config.get("enabled"):
-            result.append("\n## Hobo Configuration")
-
-            if hobo_config.get("has_dockerfile"):
-                result.append("- Uses Dockerfile")
-            if hobo_config.get("has_docker_compose"):
-                result.append("- Uses docker-compose")
-
-            # Add Hobo commands
-            if hobo_config.get("commands"):
-                result.append("\n### Hobo Commands")
-                for cmd_name, cmds in hobo_config.get("commands", {}).items():
-                    if cmds:
-                        for cmd in cmds:
-                            result.append(f"- {cmd_name}: `{cmd}`")
-
-            # Add Hobo shell scripts
-            hobo_shell_scripts = hobo_config.get("shell_scripts", [])
-            if hobo_shell_scripts:
-                result.append("\n### Hobo Shell Scripts")
-                for script in hobo_shell_scripts:
-                    result.append(f"- {script}")
-
         # Add dependencies (limit to top 20)
         if info.get("dependencies"):
             result.append("\n## Dependencies")
