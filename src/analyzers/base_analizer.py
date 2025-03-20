@@ -117,38 +117,6 @@ class BaseAnalyzer:
         config_files = []
         shell_scripts = []
         root_shell_scripts = []
-        hobo_shell_scripts = []
-
-        for root, _, files in os.walk(self.config.target_repo):
-            # Skip common directories to ignore
-            if any(
-                part in root
-                for part in [
-                    ".git",
-                    "node_modules",
-                    "venv",
-                    "__pycache__",
-                    "target",
-                    "build",
-                    "dist",
-                    ".gradle",
-                    "lemma",  # TODO - Temporarily ignore 'lemma' directory - will be needed in future
-                ]
-            ):
-                continue
-
-            for file in files:
-                if file.endswith(".sh"):
-                    file_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(file_path, self.config.target_repo)
-
-                    # Determine if this is a root script or hobo script
-                    if os.sep in rel_path:
-                        if rel_path.startswith("hobo" + os.sep):
-                            hobo_shell_scripts.append(rel_path)
-                    else:
-                        root_shell_scripts.append(rel_path)
-
         # Get analyzable extensions and key files from concrete implementation
         analyzable_extensions = self._get_analyzable_extensions()
         key_project_files = self.KEY_PROJECT_FILES.union(
@@ -328,7 +296,7 @@ class BaseAnalyzer:
                     self.logger.warning(f"Error processing {rel_path}: {str(e)}")
 
         # Add a reconciliation step to ensure all shell scripts are included in config_files
-        for script in shell_scripts + root_shell_scripts + hobo_shell_scripts:
+        for script in shell_scripts + root_shell_scripts:
             if script not in config_files:
                 config_files.append(script)
                 self.logger.debug(
@@ -378,7 +346,7 @@ class BaseAnalyzer:
             "force_primary_language": primary_language,
             "shell_scripts": shell_scripts,
             "root_shell_scripts": root_shell_scripts,
-            "hobo_shell_scripts": hobo_shell_scripts,
+
         }
 
     def _is_sonar_file(self, file_path: str) -> bool:
@@ -580,16 +548,6 @@ class BaseAnalyzer:
                     f"Added missing shell script to config files: {script}"
                 )
 
-        # Also include root_shell_scripts and hobo_shell_scripts
-        for script in file_data.get("root_shell_scripts", []) + file_data.get(
-            "hobo_shell_scripts", []
-        ):
-            if script not in config_files:
-                config_files.append(script)
-                self.logger.debug(
-                    f"Added root/hobo shell script to config files: {script}"
-                )
-
         # Explicitly scan for example configuration files
         example_config_files = []
         for root, _, files in os.walk(self.config.target_repo):
@@ -731,12 +689,6 @@ class BaseAnalyzer:
         if root_shell_scripts:
             result.append("\n## Root Shell Scripts")
             for script in root_shell_scripts:
-                result.append(f"- {script}")
-
-        hobo_shell_scripts = info.get("hobo_shell_scripts", [])
-        if hobo_shell_scripts:
-            result.append("\n## Hobo Shell Scripts")
-            for script in hobo_shell_scripts:
                 result.append(f"- {script}")
 
         return "\n".join(result)

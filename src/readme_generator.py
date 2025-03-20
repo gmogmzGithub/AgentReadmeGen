@@ -21,9 +21,6 @@ class ReadmeGenerator:
 
     STEP_PROMPTS = {
         1: """
-        # Repository Context
-        ${indeed_context}
-
         # Repository Analysis Information
         Repository Name: ${name}
         Primary Language: ${language}
@@ -49,17 +46,14 @@ class ReadmeGenerator:
 
         DO NOT list repository contents, structure, or implementation details.
         DO NOT include technical jargon without explanation.
-        DO NOT focus on development details like hobo, build system, or spring boot.
         """,
         2: """
         # Repository Context
-        ${indeed_context}
 
         # Repository Analysis Information
         Repository Name: ${name}
         Primary Language: ${language}
         ${is_spring_boot}
-        ${has_hobo}
         ${build_system}
 
         # Configuration Files
@@ -68,17 +62,12 @@ class ReadmeGenerator:
         # Run Commands and Scripts
         ${shell_scripts}
         ${root_shell_scripts}
-        ${hobo_shell_scripts}
         ${run_commands}
 
         ## Script Analysis
         - **Root Directory Scripts**: Analyze any .sh files in the repository root carefully - these often contain custom commands to run the application with Gradle or perform other essential operations.
           - Scripts containing 'start', 'run', or 'up' in their name typically launch the application
           - Scripts with 'stop', 'down', or 'kill' typically terminate the application
-
-        - **Hobo Directory Scripts**: .sh files in the hobo/ directory frequently provide custom ways to run the application with Hobo
-          - These may replace or enhance the standard './gradlew hoboRun' command
-          - They often include specific configurations or dependencies needed for the application
 
         - **Docker Configuration**: When Dockerfile or docker-compose.yml files exist:
           - Check for custom entry points or commands
@@ -99,12 +88,10 @@ class ReadmeGenerator:
         3. Required configuration settings and environment variables
 
         Don't include the following:
-         - pre-requisites that are already installed on all developer machines, including docker, hobo, gradle, maven, and a JDK.  If there is a particular JDK version needed you can mention that.
         - git clone or git checkout commands.
 
         Format your instructions as a clear, sequential guide that a new developer could follow.
         Include actual commands where possible and explain what each command does.
-        If there are multiple ways to run the application (e.g., directly, with Docker, with Hobo), explain each method.
         """,
         3: """
         # README Generation Task
@@ -438,16 +425,6 @@ class ReadmeGenerator:
                     f"  - ... and {len(root_shell_scripts) - 5} more root scripts"
                 )
 
-        hobo_shell_scripts = repo_context.get("hobo_shell_scripts", [])
-        if hobo_shell_scripts:
-            self.logger.info(f"Hobo shell scripts found: {len(hobo_shell_scripts)}")
-            for script in hobo_shell_scripts:
-                self.logger.info(f"  - Hobo script: {script}")
-            if len(hobo_shell_scripts) > 5:
-                self.logger.info(
-                    f"  - ... and {len(hobo_shell_scripts) - 5} more hobo scripts"
-                )
-
         # Log build system commands
         build_system = repo_context.get("build_system", {})
         if build_system and build_system.get("commands"):
@@ -458,15 +435,6 @@ class ReadmeGenerator:
                         self.logger.info(f"  - {cmd_name}: {cmd}")
                 else:
                     self.logger.info(f"  - {cmd_name}: {cmd_value}")
-
-        # Log hobo commands if they exist
-        hobo_config = repo_context.get("hobo_config", {})
-        if hobo_config and hobo_config.get("enabled") and hobo_config.get("commands"):
-            self.logger.info("Hobo commands:")
-            for cmd_type, cmds in hobo_config.get("commands", {}).items():
-                if cmds:
-                    for cmd in cmds:
-                        self.logger.info(f"  - {cmd_type}: {cmd}")
 
         # Log entry points
         entry_points = repo_context.get("entry_points", [])
@@ -664,13 +632,11 @@ class ReadmeGenerator:
             "language": repo_context.get("primary_language", "Unknown"),
             "is_spring_boot": repo_context.get("has_spring_boot", False),
             "entry_points": repo_context.get("entry_points", []),
-            "has_hobo": repo_context.get("hobo_config", {}).get("enabled", False),
             "build_system": repo_context.get("build_system", {}).get("type", "unknown"),
             "custom_tools": repo_context.get("custom_tools", {}).get(
                 "custom_tools", []
             ),
             "formatted_analysis": repo_context.get("formatted_analysis", ""),
-            "hobo_config": repo_context.get("hobo_config", {}),
             "file_breakdown": repo_context.get("file_breakdown", {}),
         }
 
@@ -680,17 +646,12 @@ class ReadmeGenerator:
             shell_scripts.extend(repo_context.get("shell_scripts", []))
         if "root_shell_scripts" in repo_context:
             shell_scripts.extend(repo_context.get("root_shell_scripts", []))
-        if "hobo_shell_scripts" in repo_context:
-            shell_scripts.extend(repo_context.get("hobo_shell_scripts", []))
 
         base_context["shell_scripts"] = shell_scripts
 
         # Add existing README content if available
         if "readme_contents" in repo_context and repo_context["readme_contents"]:
             base_context["existing_readme"] = repo_context["readme_contents"]
-
-        # Add Indeed-specific context information
-        base_context["indeed_context"] = self._build_indeed_context(repo_context)
 
         # Step-specific context enrichment
         if step_num == 1:  # Project Purpose
@@ -709,123 +670,6 @@ class ReadmeGenerator:
         # Default case: return base context with formatted analysis
         return base_context
 
-    def _build_indeed_context(self, repo_context):
-        """Build Indeed-specific context information.
-
-        Args:
-            repo_context: Repository analysis context
-
-        Returns:
-            List of context items with title and content
-        """
-        context_sections = []
-
-        # Start with company context section that applies to all repositories
-        context_sections.append({"title": "# Company-Specific Context", "content": ""})
-
-        # Add Hobo context information
-        if repo_context.get("hobo_config", {}).get(
-            "enabled", False
-        ) or "hoboify.sh" in repo_context.get("shell_scripts", []):
-            context_sections.append(
-                {
-                    "title": "## Hobo Context",
-                    "content": """Hobo is a local development tool that enhances the experience of running and developing containerized applications. "Hobo" describes a set of services run on the developer's machine to facilitate networking between the developer's machine and the application containers. "Hobo images" are docker images that provide common runtimes/resources specifically designed for the local environment. With a "Hoboified" application (applications that use the Hobo images and run on the Hobo Docker network), developers can easily:
-    Configure a variety of common resources used by Indeed applications such as envoy, database dependencies, and event brokers like Kafka.
-    Access their applications in the browser through intuitive names
-    Host their applications on a local web server with SSL Termination
-    Access their dependent services in the service mesh
-    Configuring Hobo is as simple as managing a single docker-compose.yml file that contains the container definitions for your application and all its resources.
-    
-    In almost all cases when hobo is being used by a project, it should be run by a hoboRun gradle command if available.""",
-                }
-            )
-
-        if repo_context.get("hobo_config", {}).get(
-            "enabled", False
-        ) is False and "hoboify.sh" in repo_context.get("shell_scripts", []):
-            context_sections.append(
-                {
-                    "title": "## Hoboify",
-                    "content": """This project has a hoboify.sh script to create the hobo configuration files.  This should be run first before attempting to use Hobo.""",
-                }
-            )
-
-        # Add Gradle context for Java projects
-        if repo_context.get("primary_language") == "Java":
-            context_sections.append(
-                {
-                    "title": "## Gradle",
-                    "content": """Indeed uses Gradle as the building tool. If your project has a primary "Main" class, like the Daemon class, this will be on the build.gradle file like the following:
-    ```
-    run {
-        mainClass = 'com.indeed.yourprojects.MainClass'
-    }
-    ```""",
-                }
-            )
-
-        # Add Development Tools section
-        context_sections.append(
-            {
-                "title": "## Development Tools",
-                "content": """- **Hobo**: A local development tool for containerized applications that provides:
-  - Network connectivity between developer machines and application containers
-  - Docker images with runtimes/resources designed for local development
-  - Configuration of common resources (envoy, databases, Kafka, etc.)
-  - Access to applications via intuitive URLs with SSL termination
-  - Simple configuration via docker-compose.yml files""",
-            }
-        )
-
-        # Add Build and Deployment section
-        context_sections.append(
-            {
-                "title": "## Build and Deployment",
-                "content": """- **Gradle**: Primary build tool used for Java projects
-  - Projects typically include gradle wrapper files for consistent builds
-  - Build commands are defined in build.gradle files
-  - Entry point classes are specified in the build.gradle 'mainClass' property
-  - The only Gradle commands we use at Indeed are:
-    - `./gradlew build`: Builds the project
-    - `./gradlew run`: Runs the application
-    - `./gradlew build run`: Builds and Runs the application
-    - Indeed does not use any other gradle command
-    """,
-            }
-        )
-
-        # Add Hobo Deployment section if hobo is enabled
-        if repo_context.get("hobo_config", {}).get("enabled", False):
-            context_sections.append(
-                {
-                    "title": "## Hobo Deployment",
-                    "content": """- **Standard Commands**:
-  - `./gradlew hoboRun`: Deploys the project
-  - `./gradlew hoboRun --with-deps`: Deploys the project with dependencies
-  - `./gradlew hoboStop`: Stops the project
-  - `./gradlew hoboStop --with-deps`: Stops the project and dependencies
-- **Configuration Location**: 
-  - Docker configuration typically in hobo/docker-compose.yml
-  - Custom deployment scripts often in hobo/*.sh files""",
-                }
-            )
-
-        # Add Repository Patterns section
-        context_sections.append(
-            {
-                "title": "## Repository Patterns",
-                "content": """- Look for .example files as they contain configuration templates, most of the times these yml.examples will have a ton of comments on them that will give very detailed instructions about the purpose of the project, so you must analyze these carefully
-- Check README or documentation files, if they exist, as they may already explain the purpose of the repository
-- Examine controller classes in web applications, as they often contain endpoints that reveal the application's functionality
-- Pay special attention to class and method names, as they frequently indicate the application's domain and purpose
-- Look for test files, as test cases often demonstrate the expected behavior and use cases of the application
-- Check custom scripts (*.sh) in root or hobo directories as they could be the way to run either Hobo or Gradle and may contain clues about the application's purpose
-- Docker-related files (Dockerfile, docker-compose.yml) in hobo directory indicate containerized deployment methods and may list dependencies that hint at functionality""",
-            }
-        )
-
-        return context_sections
 
     async def _is_crappy_readme(self, readme_content, generated_readme):
         """
@@ -862,7 +706,7 @@ class ReadmeGenerator:
     ```
     # skeleton-spring-boot-daemon
 
-    - **TODO:** Read the [Spring Boot skeleton instructions wiki page](https://go.indeed.com/spring-boot-skeleton-main#BasicDaemon) for basic setup instructions and common questions. 
+    - **TODO:** Read the [Spring Boot skeleton instructions wiki page](https://go.com/spring-boot-skeleton-main#BasicDaemon) for basic setup instructions and common questions. 
     - **TODO:** Write a meaningful README.md for your daemon:
         - Describe what the daemon does
         - Mention any dependencies that need to be setup before running the daemon
@@ -878,7 +722,7 @@ class ReadmeGenerator:
 
     EXAMPLE 2:
     ```
-    [Goggles](https://wiki.indeed.com/display/AGGC/Goggles): PDF/JSON to HTML converter HTTP service.
+    [Goggles](https://wiki.com/display/AGGC/Goggles): PDF/JSON to HTML converter HTTP service.
     ```
 
     EXAMPLE 3:
@@ -890,7 +734,7 @@ class ReadmeGenerator:
     ## TODO: Additional project setup ##
     *You may delete this section after following the instructions below.*
 
-      - Read [Setting up a new Java/Kotlin GraphQL API using the Golden Path](https://wiki.indeed.com/pages/viewpage.action?pageId=534351928)
+      - Read [Setting up a new Java/Kotlin GraphQL API using the Golden Path](https://wiki.com/pages/viewpage.action?pageId=534351928)
         for complete details on setting up your Marvin deployments and configuring GitLab CI/CD.
     - **TODO: OneGraph integration**
         - Once you have created a Marvin project and deployment group in QA, set `LEMMA: "true"` in `.gitlab-ci.yml` to run Lemma.
@@ -1037,11 +881,6 @@ class ReadmeGenerator:
                 step_context["key_files_content"] = {}
             step_context["key_files_content"][build_gradle_path] = build_gradle_content
 
-        # CRITICAL: Add hobo/docker-compose.yml if it exists - crucial for deployment
-        docker_compose_path = "hobo/docker-compose.yml"
-        docker_compose_content = repo_context.get("file_contents", {}).get(
-            docker_compose_path, ""
-        )
         if docker_compose_content and docker_compose_content.strip():
             if "key_files_content" not in step_context:
                 step_context["key_files_content"] = {}
@@ -1088,17 +927,6 @@ class ReadmeGenerator:
         if example_configs:
             step_context["example_configs"] = example_configs
 
-        # CRITICAL: Include any .indeed/entrypoints.yaml which has standard run commands
-        indeed_entrypoints_path = ".indeed/entrypoints.yaml"
-        indeed_entrypoints_content = repo_context.get("file_contents", {}).get(
-            indeed_entrypoints_path, ""
-        )
-        if indeed_entrypoints_content and indeed_entrypoints_content.strip():
-            if "key_files_content" not in step_context:
-                step_context["key_files_content"] = {}
-            step_context["key_files_content"][
-                indeed_entrypoints_path
-            ] = indeed_entrypoints_content
 
         # Filter out empty command sections and only add if there are actual commands
         run_commands = {}
@@ -1111,15 +939,6 @@ class ReadmeGenerator:
                     filtered_build_commands[cmd_type] = cmds
             if filtered_build_commands:
                 run_commands["build"] = filtered_build_commands
-
-        hobo_commands = repo_context.get("hobo_config", {}).get("commands", {})
-        if hobo_commands:
-            filtered_hobo_commands = {}
-            for cmd_type, cmds in hobo_commands.items():
-                if cmds:  # Only add non-empty command sections
-                    filtered_hobo_commands[cmd_type] = cmds
-            if filtered_hobo_commands:
-                run_commands["hobo"] = filtered_hobo_commands
 
         # Only add run_commands if there are any real commands
         if run_commands:
@@ -1136,13 +955,6 @@ class ReadmeGenerator:
             if build_gradle_content and "mainClass" in build_gradle_content:
                 standard_commands["build"]["run"] = ["./gradlew run"]
 
-            # Add hobo commands if it's a hobo project
-            if repo_context.get("has_hobo", False):
-                standard_commands["hobo"] = {
-                    "start": ["./gradlew hoboRun", "./gradlew hoboRun --with-deps"],
-                    "stop": ["./gradlew hoboStop", "./gradlew hoboStop --with-deps"],
-                }
-
             step_context["run_commands"] = standard_commands
 
         # Shell scripts - only add non-empty lists
@@ -1154,10 +966,6 @@ class ReadmeGenerator:
         if root_shell_scripts:
             step_context["root_shell_scripts"] = root_shell_scripts
 
-        hobo_shell_scripts = repo_context.get("hobo_shell_scripts", [])
-        if hobo_shell_scripts:
-            step_context["hobo_shell_scripts"] = hobo_shell_scripts
-
         # Add formatted analysis only if non-empty
         formatted_analysis = repo_context.get("formatted_analysis", "").strip()
         if formatted_analysis:
@@ -1167,10 +975,6 @@ class ReadmeGenerator:
         if repo_context.get("has_spring_boot", False):
             step_context["is_spring_boot"] = True
 
-        # CRITICAL: Include Hobo indicator if applicable
-        if repo_context.get("has_hobo", False):
-            step_context["has_hobo"] = True
-            step_context["hobo_details"] = repo_context.get("hobo_config", {})
 
         return step_context
 
@@ -1454,20 +1258,6 @@ class ReadmeGenerator:
 
             return template
 
-        # Format the dynamic indeed_context sections
-        indeed_context_str = ""
-        for section in context.get("indeed_context", []):
-            # Only include sections with content
-            if section.get("content") and section["content"].strip():
-                indeed_context_str += f"{section['title']}\n{section['content']}\n\n"
-            elif (
-                section.get("title") and "Company-Specific Context" in section["title"]
-            ):
-                # Include main heading even if empty
-                indeed_context_str += f"{section['title']}\n\n"
-
-        template = template.replace("${indeed_context}", indeed_context_str)
-
         # Basic repo information
         template = template.replace("${name}", context.get("name", "Unknown"))
         template = template.replace(
@@ -1481,26 +1271,6 @@ class ReadmeGenerator:
             )
         else:
             template = template.replace("${is_spring_boot}", "")
-
-        # Hobo information
-        if context.get("has_hobo", False):
-            hobo_info = "This project uses Hobo for containerized development."
-
-            # Add extra Hobo details if available (for Step 2 especially)
-            if step_num == 2 and context.get("hobo_details"):
-                hobo_details = context.get("hobo_details", {})
-                if hobo_details.get("has_docker_compose"):
-                    hobo_info += "\nHobo configuration includes docker-compose setup."
-                if hobo_details.get("files"):
-                    hobo_files = hobo_details.get("files", [])
-                    if hobo_files:
-                        hobo_info += (
-                            f"\nHobo configuration files: {', '.join(hobo_files)}"
-                        )
-
-            template = template.replace("${has_hobo}", hobo_info)
-        else:
-            template = template.replace("${has_hobo}", "")
 
         # Build system info
         template = template.replace(
@@ -1548,8 +1318,7 @@ class ReadmeGenerator:
                 # Process critical files first to ensure they appear at the top
                 critical_files = [
                     "build.gradle",
-                    "hobo/docker-compose.yml",
-                    ".indeed/entrypoints.yaml",
+
                 ]
 
                 # First process critical files
@@ -1634,17 +1403,6 @@ class ReadmeGenerator:
             )
         else:
             template = template.replace("${root_shell_scripts}", "")
-
-        # Hobo shell scripts - only include non-empty lists
-        hobo_scripts = context.get("hobo_shell_scripts", [])
-        if hobo_scripts:
-            hobo_scripts_str = "\n".join([f"- {s}" for s in hobo_scripts])
-            template = template.replace(
-                "${hobo_shell_scripts}", f"## Hobo Shell Scripts\n{hobo_scripts_str}"
-            )
-        else:
-            template = template.replace("${hobo_shell_scripts}", "")
-
         # Run commands - check for empty objects at each level
         run_commands_content = ""
         has_commands = False
@@ -1668,26 +1426,6 @@ class ReadmeGenerator:
                             run_commands_content += f"- {cmd_type}: `{cmd}`\n"
                     else:
                         run_commands_content += f"- {cmd_type}: `{cmds}`\n"
-
-            # Check hobo commands
-            hobo_cmds = run_commands.get("hobo", {})
-            if hobo_cmds and any(cmds for cmds in hobo_cmds.values() if cmds):
-                has_commands = True
-                if run_commands_content:  # Only add newline if there's previous content
-                    run_commands_content += "\n"
-                run_commands_content += "### Hobo Commands\n"
-                for cmd_type, cmds in hobo_cmds.items():
-                    if not cmds:  # Skip empty command lists
-                        continue
-
-                    if isinstance(cmds, list):
-                        if not cmds:  # Skip empty lists
-                            continue
-                        for cmd in cmds:
-                            run_commands_content += f"- {cmd_type}: `{cmd}`\n"
-                    else:
-                        run_commands_content += f"- {cmd_type}: `{cmds}`\n"
-
         if has_commands:
             template = template.replace("${run_commands}", run_commands_content)
         else:

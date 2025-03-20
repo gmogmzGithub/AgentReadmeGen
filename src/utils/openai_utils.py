@@ -127,7 +127,6 @@ class CustomChatOpenAI(ChatOpenAI):
         if hasattr(self, "client"):
             # Set up headers for the LLM proxy
             default_headers = getattr(self.client, "default_headers", {}).copy()
-            default_headers["x-indeed-redact-allow"] = "*"
             default_headers["x-app-id"] = "ai-readme-generation"
 
             self.client = CustomOpenAIClient(
